@@ -497,7 +497,16 @@
         async fetchInitialData() {
           this.isLoading = true;
           try {
-            const res = await fetch(API_URL + "?action=getInitialData");
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const res = await fetch(API_URL + "?action=getInitialData", {
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (!res.ok) throw new Error('Network response was not ok');
+            
             const data = await res.json();
             if (data.players) this.players = data.players;
             if (data.matches) this.matches = data.matches;
@@ -505,17 +514,16 @@
               const updated = this.matches.find(m => m.id === this.selectedMatch.id);
               if (updated) this.selectedMatch = updated;
             }
-          } catch(e) {} finally { this.isLoading = false; }
-        },
-        toggleCivStats() {
-          this.showCivStats = !this.showCivStats;
-          localStorage.setItem('aoe_showCivStats', this.showCivStats);
-          fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'saveSettings', showCivStats: this.showCivStats })
-          });
-          this.showNotify(this.showCivStats ? "Đã BẬT hiển thị Cung-Chém" : "Đã ẨN hiển thị Cung-Chém");
+          } catch(e) {
+            console.error('Lỗi fetch:', e);
+            if (e.name === 'AbortError') {
+              this.showNotify('Kết nối quá lâu!', 'error');
+            } else {
+              this.showNotify('Lỗi kết nối server!', 'error');
+            }
+          } finally {
+            this.isLoading = false;
+          }
         },
         async addPlayer() {
           if (!this.newPlayerForm.name) return;
